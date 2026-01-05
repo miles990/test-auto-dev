@@ -327,6 +327,11 @@
                         color: data.color,
                         score: 0
                     };
+                    updatePlayerList();
+                    // 自動開始遊戲
+                    if (!gameRunning) {
+                        startGame();
+                    }
                     break;
 
                 case 'update':
@@ -472,15 +477,16 @@
             food.push(newFood);
         }
 
-        // 更新遊戲（單機模式）
+        // 更新遊戲
         function updateGame() {
-            if (!gameRunning || gamePaused || !mySnake) return;
+            if (!gameRunning || gamePaused) return;
 
-            if (!connected) {
+            if (!connected && mySnake) {
                 // 單機模式邏輯
                 updateLocalGame();
             }
 
+            // 繪製畫面（單機和多人模式都需要）
             draw();
         }
 
