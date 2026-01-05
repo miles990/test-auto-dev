@@ -221,8 +221,17 @@
         const playersElement = document.getElementById('players');
 
         // 遊戲設定
-        const gridSize = 20;
-        const tileCount = canvas.width / gridSize;
+        const GRID_SIZE = 20;
+        const TILE_COUNT = canvas.width / GRID_SIZE;
+        const GAME_SPEED = 100; // 遊戲更新速度（毫秒）
+        const EYE_SIZE = 3;
+        const EYE_OFFSET = 5;
+        const GRID_PADDING = 2;
+        const FOOD_RADIUS_OFFSET = 2;
+
+        // 向下兼容的別名
+        const gridSize = GRID_SIZE;
+        const tileCount = TILE_COUNT;
 
         // 遊戲狀態
         let gameRunning = false;
@@ -298,9 +307,11 @@
                 };
             } catch (error) {
                 console.error('無法連線:', error);
-                alert('無法連線到伺服器。請確認伺服器位址正確並已啟動。\n\n單機模式：即使沒有伺服器也可以玩！');
-                statusElement.textContent = '單機模式';
-                statusElement.className = 'status disconnected';
+                showNotification('無法連線到伺服器 - 使用單機模式', 'error');
+                setTimeout(() => {
+                    statusElement.textContent = '單機模式';
+                    statusElement.className = 'status disconnected';
+                }, 2000);
             }
         }
 
@@ -358,6 +369,26 @@
             }
         }
 
+        // 顯示遊戲結束訊息
+        function showGameOver(message) {
+            statusElement.textContent = message;
+            statusElement.className = 'status disconnected';
+            setTimeout(() => {
+                if (!connected) {
+                    statusElement.textContent = '單機模式';
+                } else {
+                    statusElement.textContent = '已連線';
+                    statusElement.className = 'status connected';
+                }
+            }, 3000);
+        }
+
+        // 顯示通知訊息
+        function showNotification(message, type = 'info') {
+            statusElement.textContent = message;
+            statusElement.className = `status ${type === 'error' ? 'disconnected' : 'connected'}`;
+        }
+
         // 更新玩家列表
         function updatePlayerList() {
             const playerArray = Object.values(players);
@@ -388,13 +419,14 @@
                     score: 0
                 };
                 spawnFood();
+                updatePlayerList();
             }
 
             gameRunning = true;
             gamePaused = false;
 
             if (gameLoop) clearInterval(gameLoop);
-            gameLoop = setInterval(updateGame, 100);
+            gameLoop = setInterval(updateGame, GAME_SPEED);
         }
 
         // 暫停遊戲
@@ -471,16 +503,17 @@
                 newHead.y < 0 || newHead.y >= tileCount) {
                 mySnake.alive = false;
                 gameRunning = false;
-                alert('遊戲結束！分數: ' + score);
+                showGameOver('遊戲結束！分數: ' + score);
                 return;
             }
 
-            // 檢查撞到自己
-            for (let segment of mySnake.body) {
+            // 檢查撞到自己（跳過頭部）
+            for (let i = 1; i < mySnake.body.length; i++) {
+                const segment = mySnake.body[i];
                 if (segment.x === newHead.x && segment.y === newHead.y) {
                     mySnake.alive = false;
                     gameRunning = false;
-                    alert('遊戲結束！分數: ' + score);
+                    showGameOver('遊戲結束！分數: ' + score);
                     return;
                 }
             }
@@ -539,9 +572,9 @@
             food.forEach(f => {
                 ctx.beginPath();
                 ctx.arc(
-                    f.x * gridSize + gridSize / 2,
-                    f.y * gridSize + gridSize / 2,
-                    gridSize / 2 - 2,
+                    f.x * GRID_SIZE + GRID_SIZE / 2,
+                    f.y * GRID_SIZE + GRID_SIZE / 2,
+                    GRID_SIZE / 2 - FOOD_RADIUS_OFFSET,
                     0,
                     Math.PI * 2
                 );
@@ -558,37 +591,35 @@
                         // 蛇頭
                         ctx.fillStyle = player.color;
                         ctx.fillRect(
-                            segment.x * gridSize + 2,
-                            segment.y * gridSize + 2,
-                            gridSize - 4,
-                            gridSize - 4
+                            segment.x * GRID_SIZE + GRID_PADDING,
+                            segment.y * GRID_SIZE + GRID_PADDING,
+                            GRID_SIZE - GRID_PADDING * 2,
+                            GRID_SIZE - GRID_PADDING * 2
                         );
 
                         // 眼睛
                         ctx.fillStyle = '#FFF';
-                        const eyeSize = 3;
-                        const eyeOffset = 5;
 
                         if (player.snake.direction.x === 1) { // 向右
-                            ctx.fillRect(segment.x * gridSize + gridSize - eyeOffset - eyeSize,
-                                       segment.y * gridSize + eyeOffset, eyeSize, eyeSize);
-                            ctx.fillRect(segment.x * gridSize + gridSize - eyeOffset - eyeSize,
-                                       segment.y * gridSize + gridSize - eyeOffset - eyeSize, eyeSize, eyeSize);
+                            ctx.fillRect(segment.x * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE,
+                                       segment.y * GRID_SIZE + EYE_OFFSET, EYE_SIZE, EYE_SIZE);
+                            ctx.fillRect(segment.x * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE,
+                                       segment.y * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE, EYE_SIZE, EYE_SIZE);
                         } else if (player.snake.direction.x === -1) { // 向左
-                            ctx.fillRect(segment.x * gridSize + eyeOffset,
-                                       segment.y * gridSize + eyeOffset, eyeSize, eyeSize);
-                            ctx.fillRect(segment.x * gridSize + eyeOffset,
-                                       segment.y * gridSize + gridSize - eyeOffset - eyeSize, eyeSize, eyeSize);
+                            ctx.fillRect(segment.x * GRID_SIZE + EYE_OFFSET,
+                                       segment.y * GRID_SIZE + EYE_OFFSET, EYE_SIZE, EYE_SIZE);
+                            ctx.fillRect(segment.x * GRID_SIZE + EYE_OFFSET,
+                                       segment.y * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE, EYE_SIZE, EYE_SIZE);
                         } else if (player.snake.direction.y === 1) { // 向下
-                            ctx.fillRect(segment.x * gridSize + eyeOffset,
-                                       segment.y * gridSize + gridSize - eyeOffset - eyeSize, eyeSize, eyeSize);
-                            ctx.fillRect(segment.x * gridSize + gridSize - eyeOffset - eyeSize,
-                                       segment.y * gridSize + gridSize - eyeOffset - eyeSize, eyeSize, eyeSize);
+                            ctx.fillRect(segment.x * GRID_SIZE + EYE_OFFSET,
+                                       segment.y * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE, EYE_SIZE, EYE_SIZE);
+                            ctx.fillRect(segment.x * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE,
+                                       segment.y * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE, EYE_SIZE, EYE_SIZE);
                         } else { // 向上
-                            ctx.fillRect(segment.x * gridSize + eyeOffset,
-                                       segment.y * gridSize + eyeOffset, eyeSize, eyeSize);
-                            ctx.fillRect(segment.x * gridSize + gridSize - eyeOffset - eyeSize,
-                                       segment.y * gridSize + eyeOffset, eyeSize, eyeSize);
+                            ctx.fillRect(segment.x * GRID_SIZE + EYE_OFFSET,
+                                       segment.y * GRID_SIZE + EYE_OFFSET, EYE_SIZE, EYE_SIZE);
+                            ctx.fillRect(segment.x * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE,
+                                       segment.y * GRID_SIZE + EYE_OFFSET, EYE_SIZE, EYE_SIZE);
                         }
                     } else {
                         // 蛇身
@@ -596,10 +627,10 @@
                         ctx.globalAlpha = alpha;
                         ctx.fillStyle = player.color;
                         ctx.fillRect(
-                            segment.x * gridSize + 2,
-                            segment.y * gridSize + 2,
-                            gridSize - 4,
-                            gridSize - 4
+                            segment.x * GRID_SIZE + GRID_PADDING,
+                            segment.y * GRID_SIZE + GRID_PADDING,
+                            GRID_SIZE - GRID_PADDING * 2,
+                            GRID_SIZE - GRID_PADDING * 2
                         );
                         ctx.globalAlpha = 1;
                     }

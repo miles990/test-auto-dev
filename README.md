@@ -40,16 +40,29 @@
 npm install
 ```
 
-2. 啟動 WebSocket 伺服器：
+2. （可選）配置伺服器設定：
+```bash
+cp .env.example .env
+# 編輯 .env 檔案來自訂伺服器設定
+```
+
+預設設定：
+- `WS_PORT=8080` - WebSocket 伺服器埠號
+- `WS_HOST=localhost` - WebSocket 伺服器主機（安全起見預設為 localhost）
+- `GAME_SPEED=100` - 遊戲更新速度（毫秒）
+- `TILE_COUNT=30` - 遊戲格子數量
+- `MAX_FOOD_SPAWN_RETRIES=100` - 食物生成最大重試次數
+
+3. 啟動 WebSocket 伺服器：
 ```bash
 npm start
 ```
 
-3. 在瀏覽器開啟 `snake-game.html`
+4. 在瀏覽器開啟 `snake-game.html`
 
-4. 點擊「連線」按鈕連接到伺服器
+5. 點擊「連線」按鈕連接到伺服器
 
-5. 點擊「開始遊戲」開始遊玩
+6. 點擊「開始遊戲」開始遊玩
 
 #### 遊戲操作
 - 方向鍵 ↑↓←→ 或 WASD 控制蛇的移動

@@ -1,12 +1,20 @@
+require('dotenv').config();
 const WebSocket = require('ws');
+const crypto = require('crypto');
 
-// 建立 WebSocket 伺服器
-const wss = new WebSocket.Server({ port: 8080 });
+// 配置設定
+const WS_PORT = parseInt(process.env.WS_PORT) || 8080;
+const WS_HOST = process.env.WS_HOST || 'localhost';
+const GAME_SPEED = parseInt(process.env.GAME_SPEED) || 100;
+const GRID_SIZE = parseInt(process.env.GRID_SIZE) || 20;
+const TILE_COUNT = parseInt(process.env.TILE_COUNT) || 30;
+const MAX_FOOD_SPAWN_RETRIES = parseInt(process.env.MAX_FOOD_SPAWN_RETRIES) || 100;
 
-// 遊戲設定
-const GRID_SIZE = 20;
-const TILE_COUNT = 30;
-const GAME_SPEED = 100;
+// 建立 WebSocket 伺服器（綁定到指定的 host，預設為 localhost）
+const wss = new WebSocket.Server({
+    port: WS_PORT,
+    host: WS_HOST
+});
 
 // 遊戲狀態
 let players = {};
@@ -23,7 +31,11 @@ let colorIndex = 0;
 
 // 生成唯一 ID
 function generateId() {
-    return Math.random().toString(36).substring(2, 15);
+    let id;
+    do {
+        id = crypto.randomBytes(6).toString('hex');
+    } while (players[id]); // 確保 ID 不重複
+    return id;
 }
 
 // 獲取下一個顏色
@@ -52,28 +64,37 @@ function createSnake(color) {
 
 // 生成食物
 function spawnFood() {
-    const newFood = {
-        x: Math.floor(Math.random() * TILE_COUNT),
-        y: Math.floor(Math.random() * TILE_COUNT)
-    };
+    let retries = 0;
+    let newFood = null;
+    let valid = false;
 
-    // 確保食物不會出現在蛇身上
-    let valid = true;
-    Object.values(players).forEach(player => {
-        if (player.snake) {
-            player.snake.body.forEach(segment => {
-                if (segment.x === newFood.x && segment.y === newFood.y) {
-                    valid = false;
+    while (!valid && retries < MAX_FOOD_SPAWN_RETRIES) {
+        newFood = {
+            x: Math.floor(Math.random() * TILE_COUNT),
+            y: Math.floor(Math.random() * TILE_COUNT)
+        };
+
+        // 確保食物不會出現在蛇身上
+        valid = true;
+        for (const player of Object.values(players)) {
+            if (player.snake) {
+                for (const segment of player.snake.body) {
+                    if (segment.x === newFood.x && segment.y === newFood.y) {
+                        valid = false;
+                        break;
+                    }
                 }
-            });
+                if (!valid) break;
+            }
         }
-    });
 
-    if (valid) {
+        retries++;
+    }
+
+    if (valid && newFood) {
         food.push(newFood);
-    } else {
-        // 如果位置無效，重新生成
-        spawnFood();
+    } else if (retries >= MAX_FOOD_SPAWN_RETRIES) {
+        console.warn('無法生成食物：棋盤可能已滿');
     }
 }
 
@@ -114,8 +135,9 @@ function updateGame() {
             return;
         }
 
-        // 檢查撞到自己
-        for (let segment of snake.body) {
+        // 檢查撞到自己（跳過頭部）
+        for (let i = 1; i < snake.body.length; i++) {
+            const segment = snake.body[i];
             if (segment.x === newHead.x && segment.y === newHead.y) {
                 snake.alive = false;
                 console.log(`玩家 ${playerId} 撞到自己死亡`);
@@ -240,11 +262,47 @@ wss.on('connection', (ws) => {
     // 處理訊息
     ws.on('message', (message) => {
         try {
+            // 驗證訊息大小（防止過大的訊息）
+            if (message.length > 1024) {
+                console.warn(`玩家 ${playerId} 發送過大訊息`);
+                return;
+            }
+
             const data = JSON.parse(message);
+
+            // 驗證訊息結構
+            if (!data || typeof data !== 'object' || !data.type) {
+                console.warn(`玩家 ${playerId} 發送無效訊息格式`);
+                return;
+            }
 
             if (data.type === 'move' && players[playerId] && players[playerId].snake) {
                 const snake = players[playerId].snake;
                 const newDir = data.direction;
+
+                // 驗證方向物件
+                if (!newDir || typeof newDir !== 'object' ||
+                    typeof newDir.x !== 'number' || typeof newDir.y !== 'number') {
+                    console.warn(`玩家 ${playerId} 發送無效方向格式`);
+                    return;
+                }
+
+                // 驗證方向值（只允許四個方向）
+                const validDirections = [
+                    { x: 0, y: 1 },   // 下
+                    { x: 0, y: -1 },  // 上
+                    { x: 1, y: 0 },   // 右
+                    { x: -1, y: 0 }   // 左
+                ];
+
+                const isValid = validDirections.some(d =>
+                    d.x === newDir.x && d.y === newDir.y
+                );
+
+                if (!isValid) {
+                    console.warn(`玩家 ${playerId} 發送無效方向值: ${JSON.stringify(newDir)}`);
+                    return;
+                }
 
                 // 檢查是否為有效的轉向（不能直接往反方向）
                 if ((snake.direction.x === 0 && newDir.x !== 0) ||
@@ -258,6 +316,8 @@ wss.on('connection', (ws) => {
                     players[playerId].score = 0;
                     console.log(`玩家 ${playerId} 重新開始`);
                 }
+            } else {
+                console.warn(`玩家 ${playerId} 發送未知訊息類型: ${data.type}`);
             }
         } catch (error) {
             console.error('處理訊息時發生錯誤:', error);
@@ -288,7 +348,7 @@ wss.on('connection', (ws) => {
     });
 });
 
-console.log('WebSocket 伺服器運行在 ws://localhost:8080');
+console.log(`WebSocket 伺服器運行在 ws://${WS_HOST}:${WS_PORT}`);
 console.log('等待玩家連線...');
 
 // 優雅關閉
