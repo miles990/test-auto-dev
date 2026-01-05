@@ -1,28 +1,45 @@
 # Auto-Dev Workflow
-# 使用 miles990/claude-software-skills 的 reusable workflow
+# 使用官方 claude-code-action
 
 name: 🤖 Auto-Dev
 
 on:
   issues:
-    types: [labeled]
+    types: [labeled, opened]
   issue_comment:
     types: [created]
-  workflow_dispatch:
-    inputs:
-      goal:
-        description: '開發目標'
-        required: true
-        type: string
+  pull_request_review_comment:
+    types: [created]
 
-concurrency:
-  group: auto-dev-${{ github.event.issue.number || github.run_id }}
-  cancel-in-progress: false
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
 
 jobs:
   auto-dev:
-    uses: miles990/claude-software-skills/.github/workflows/auto-dev-reusable.yml@main
-    with:
-      goal: ${{ github.event.inputs.goal || '' }}
-    secrets:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    # 條件：Issue 有 auto-dev label 或 comment 包含 @claude
+    if: |
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'auto-dev')) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment')
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # 二擇一：
+          # 方式 1: Claude Max (OAuth)
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # 方式 2: API Key
+          # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # 自訂提示（可選）
+          prompt: |
+            你是一個專業的軟體開發助手。
+            請根據 Issue 描述完成開發任務。
+            完成後建立 PR。
