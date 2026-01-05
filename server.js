@@ -20,6 +20,7 @@ const wss = new WebSocket.Server({
 let players = {};
 let food = [];
 let gameLoop = null;
+let gameState = 'waiting'; // 'waiting' 或 'playing'
 
 // 顏色列表
 const colors = [
@@ -108,8 +109,27 @@ function broadcast(data) {
     });
 }
 
+// 廣播大廳狀態
+function broadcastLobbyState() {
+    const lobbyData = {
+        type: 'lobbyUpdate',
+        gameState: gameState,
+        players: Object.entries(players).map(([id, player]) => ({
+            id: id,
+            color: player.color,
+            ready: player.ready,
+            score: player.score,
+            alive: player.snake ? player.snake.alive : false
+        }))
+    };
+    broadcast(lobbyData);
+}
+
 // 更新遊戲狀態
 function updateGame() {
+    // 只在遊戲進行中更新
+    if (gameState !== 'playing') return;
+
     let foodEaten = false;
 
     Object.entries(players).forEach(([playerId, player]) => {
@@ -201,6 +221,37 @@ function updateGame() {
     broadcast(gameState);
 }
 
+// 開始遊戲
+function startGame() {
+    if (gameState === 'playing') return;
+
+    console.log('開始遊戲');
+    gameState = 'playing';
+
+    // 為所有玩家建立蛇
+    Object.entries(players).forEach(([id, player]) => {
+        if (!player.snake) {
+            player.snake = createSnake(player.color);
+        }
+        player.ready = false;
+    });
+
+    // 生成初始食物
+    food = [];
+    for (let i = 0; i < 3; i++) {
+        spawnFood();
+    }
+
+    // 廣播遊戲開始
+    broadcast({
+        type: 'gameStart'
+    });
+
+    // 開始遊戲循環
+    startGameLoop();
+    broadcastLobbyState();
+}
+
 // 開始遊戲循環
 function startGameLoop() {
     if (gameLoop) return;
@@ -230,15 +281,17 @@ wss.on('connection', (ws) => {
         id: playerId,
         ws: ws,
         color: color,
-        snake: createSnake(color),
-        score: 0
+        snake: gameState === 'playing' ? createSnake(color) : null,
+        score: 0,
+        ready: false
     };
 
     // 發送初始化資料給新玩家
     ws.send(JSON.stringify({
         type: 'init',
         playerId: playerId,
-        color: color
+        color: color,
+        gameState: gameState
     }));
 
     // 通知其他玩家
@@ -247,17 +300,15 @@ wss.on('connection', (ws) => {
         playerId: playerId
     });
 
-    // 確保有食物
-    if (food.length === 0) {
+    // 確保有食物（只在遊戲進行中）
+    if (gameState === 'playing' && food.length === 0) {
         for (let i = 0; i < 3; i++) {
             spawnFood();
         }
     }
 
-    // 如果這是第一個玩家，開始遊戲循環
-    if (Object.keys(players).length === 1) {
-        startGameLoop();
-    }
+    // 廣播大廳狀態
+    broadcastLobbyState();
 
     // 處理訊息
     ws.on('message', (message) => {
@@ -309,6 +360,25 @@ wss.on('connection', (ws) => {
                     (snake.direction.y === 0 && newDir.y !== 0)) {
                     snake.nextDirection = newDir;
                 }
+            } else if (data.type === 'ready') {
+                // 玩家準備
+                if (players[playerId]) {
+                    players[playerId].ready = !players[playerId].ready;
+                    console.log(`玩家 ${playerId} ${players[playerId].ready ? '已準備' : '取消準備'}`);
+                    broadcastLobbyState();
+                }
+            } else if (data.type === 'start') {
+                // 開始遊戲
+                console.log(`玩家 ${playerId} 啟動遊戲`);
+                startGame();
+            } else if (data.type === 'respawn') {
+                // 重生
+                if (players[playerId] && gameState === 'playing') {
+                    players[playerId].snake = createSnake(players[playerId].color);
+                    players[playerId].score = 0;
+                    console.log(`玩家 ${playerId} 重生`);
+                    broadcastLobbyState();
+                }
             } else if (data.type === 'reset') {
                 // 重置玩家的蛇
                 if (players[playerId]) {
@@ -336,10 +406,15 @@ wss.on('connection', (ws) => {
             playerId: playerId
         });
 
-        // 如果沒有玩家了，停止遊戲循環
+        // 廣播大廳狀態
+        broadcastLobbyState();
+
+        // 如果沒有玩家了，重置遊戲狀態
         if (Object.keys(players).length === 0) {
             stopGameLoop();
             food = [];
+            gameState = 'waiting';
+            console.log('所有玩家已離線，重置遊戲');
         }
     });
 

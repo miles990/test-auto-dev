@@ -131,6 +131,15 @@
             border-radius: 5px;
             display: flex;
             align-items: center;
+            justify-content: space-between;
+        }
+
+        .player-item.ready {
+            background: rgba(52, 199, 89, 0.3);
+        }
+
+        .player-item.dead {
+            background: rgba(255, 59, 48, 0.3);
         }
 
         .player-color {
@@ -139,6 +148,19 @@
             border-radius: 50%;
             margin-right: 10px;
             border: 2px solid #fff;
+        }
+
+        .player-info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+
+        .player-status {
+            font-size: 0.8rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .connection-form {
@@ -190,9 +212,10 @@
         <canvas id="gameCanvas" width="600" height="600"></canvas>
 
         <div class="controls">
-            <button onclick="startGame()">開始遊戲</button>
+            <button id="readyBtn" onclick="toggleReady()" style="display: none;">準備</button>
+            <button id="startBtn" onclick="requestStart()" style="display: none;">開始遊戲</button>
+            <button id="respawnBtn" onclick="respawn()" style="display: none;">重生</button>
             <button onclick="pauseGame()">暫停</button>
-            <button onclick="resetGame()">重新開始</button>
         </div>
 
         <div class="player-list" id="playerList">
@@ -238,6 +261,7 @@
         let gamePaused = false;
         let score = 0;
         let gameLoop = null;
+        let serverGameState = 'waiting'; // 'waiting' 或 'playing'
 
         // WebSocket 連線
         let ws = null;
@@ -247,9 +271,15 @@
         // 玩家資料
         let players = {};
         let mySnake = null;
+        let myReady = false;
 
         // 食物位置
         let food = [];
+
+        // UI 元素
+        const readyBtn = document.getElementById('readyBtn');
+        const startBtn = document.getElementById('startBtn');
+        const respawnBtn = document.getElementById('respawnBtn');
 
         // 顏色列表
         const colors = [
@@ -287,6 +317,7 @@
                     statusElement.textContent = '已連線';
                     statusElement.className = 'status connected';
                     console.log('已連線到伺服器');
+                    updateUI();
                 };
 
                 ws.onmessage = (event) => {
@@ -304,6 +335,7 @@
                     statusElement.textContent = '連線已斷開';
                     statusElement.className = 'status disconnected';
                     console.log('與伺服器斷線');
+                    updateUI();
                 };
             } catch (error) {
                 console.error('無法連線:', error);
@@ -320,18 +352,56 @@
             switch (data.type) {
                 case 'init':
                     playerId = data.playerId;
-                    mySnake = createSnake(data.color);
+                    serverGameState = data.gameState;
+                    mySnake = data.gameState === 'playing' ? createSnake(data.color) : null;
                     players[playerId] = {
                         id: playerId,
                         snake: mySnake,
                         color: data.color,
-                        score: 0
+                        score: 0,
+                        ready: false
                     };
+                    updateUI();
+                    break;
+
+                case 'lobbyUpdate':
+                    serverGameState = data.gameState;
+                    // 更新玩家列表但保留自己的蛇引用
+                    data.players.forEach(p => {
+                        if (p.id === playerId) {
+                            myReady = p.ready;
+                            score = p.score;
+                            scoreElement.textContent = score;
+                        }
+                        players[p.id] = {
+                            id: p.id,
+                            color: p.color,
+                            score: p.score,
+                            ready: p.ready,
+                            alive: p.alive
+                        };
+                    });
+                    // 移除已離開的玩家
+                    const playerIds = data.players.map(p => p.id);
+                    Object.keys(players).forEach(id => {
+                        if (!playerIds.includes(id)) {
+                            delete players[id];
+                        }
+                    });
+                    updatePlayerList();
+                    updateUI();
+                    break;
+
+                case 'gameStart':
+                    serverGameState = 'playing';
+                    if (!gameRunning) {
+                        startGame();
+                    }
+                    updateUI();
                     break;
 
                 case 'update':
                     // 更新所有玩家
-                    players = {};
                     data.players.forEach(p => {
                         players[p.id] = p;
                         if (p.id === playerId) {
@@ -341,7 +411,6 @@
                         }
                     });
                     food = data.food;
-                    updatePlayerList();
                     break;
 
                 case 'playerJoined':
@@ -396,31 +465,89 @@
 
             playersElement.innerHTML = playerArray
                 .sort((a, b) => b.score - a.score)
-                .map(p => `
-                    <div class="player-item">
-                        <div class="player-color" style="background-color: ${p.color}"></div>
-                        <div>玩家 ${p.id.substring(0, 6)} - 分數: ${p.score}</div>
-                    </div>
-                `).join('');
+                .map(p => {
+                    let statusClass = '';
+                    let statusText = '';
+
+                    if (serverGameState === 'waiting') {
+                        statusClass = p.ready ? 'ready' : '';
+                        statusText = p.ready ? '✓ 準備' : '';
+                    } else {
+                        statusClass = p.alive ? '' : 'dead';
+                        statusText = p.alive ? '' : '☠ 死亡';
+                    }
+
+                    return `
+                        <div class="player-item ${statusClass}">
+                            <div class="player-info">
+                                <div class="player-color" style="background-color: ${p.color}"></div>
+                                <div>玩家 ${p.id.substring(0, 6)} ${p.id === playerId ? '(你)' : ''} - 分數: ${p.score}</div>
+                            </div>
+                            ${statusText ? `<div class="player-status">${statusText}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+        }
+
+        // 更新 UI 狀態
+        function updateUI() {
+            if (!connected) {
+                readyBtn.style.display = 'none';
+                startBtn.style.display = 'none';
+                respawnBtn.style.display = 'none';
+                return;
+            }
+
+            if (serverGameState === 'waiting') {
+                // 大廳狀態
+                readyBtn.style.display = 'inline-block';
+                startBtn.style.display = 'inline-block';
+                respawnBtn.style.display = 'none';
+                readyBtn.textContent = myReady ? '取消準備' : '準備';
+                statusElement.textContent = '等待中 - ' + (myReady ? '已準備' : '未準備');
+                statusElement.className = 'status ' + (myReady ? 'connected' : 'disconnected');
+            } else {
+                // 遊戲進行中
+                readyBtn.style.display = 'none';
+                startBtn.style.display = 'none';
+
+                if (mySnake && !mySnake.alive) {
+                    respawnBtn.style.display = 'inline-block';
+                    statusElement.textContent = '你已死亡';
+                    statusElement.className = 'status disconnected';
+                } else {
+                    respawnBtn.style.display = 'none';
+                    statusElement.textContent = '遊戲進行中';
+                    statusElement.className = 'status connected';
+                }
+            }
+        }
+
+        // 切換準備狀態
+        function toggleReady() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ready' }));
+            }
+        }
+
+        // 請求開始遊戲
+        function requestStart() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'start' }));
+            }
+        }
+
+        // 重生
+        function respawn() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'respawn' }));
+                respawnBtn.style.display = 'none';
+            }
         }
 
         // 開始遊戲
         function startGame() {
             if (gameRunning) return;
-
-            // 單機模式初始化
-            if (!connected && !mySnake) {
-                playerId = 'local';
-                mySnake = createSnake(colors[0]);
-                players[playerId] = {
-                    id: playerId,
-                    snake: mySnake,
-                    color: colors[0],
-                    score: 0
-                };
-                spawnFood();
-                updatePlayerList();
-            }
 
             gameRunning = true;
             gamePaused = false;
@@ -434,115 +561,16 @@
             gamePaused = !gamePaused;
         }
 
-        // 重新開始
-        function resetGame() {
-            gameRunning = false;
-            gamePaused = false;
-            score = 0;
-            scoreElement.textContent = score;
 
-            if (gameLoop) {
-                clearInterval(gameLoop);
-                gameLoop = null;
-            }
-
-            if (!connected) {
-                mySnake = createSnake(colors[0]);
-                players[playerId] = {
-                    id: playerId,
-                    snake: mySnake,
-                    color: colors[0],
-                    score: 0
-                };
-                food = [];
-                spawnFood();
-            } else if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'reset' }));
-            }
-        }
-
-        // 生成食物（單機模式）
-        function spawnFood() {
-            if (connected) return;
-
-            const newFood = {
-                x: Math.floor(Math.random() * tileCount),
-                y: Math.floor(Math.random() * tileCount)
-            };
-            food.push(newFood);
-        }
-
-        // 更新遊戲（單機模式）
+        // 更新遊戲
         function updateGame() {
-            if (!gameRunning || gamePaused || !mySnake) return;
-
-            if (!connected) {
-                // 單機模式邏輯
-                updateLocalGame();
-            }
+            if (!gameRunning || gamePaused) return;
 
             draw();
-        }
 
-        // 單機遊戲邏輯
-        function updateLocalGame() {
-            if (!mySnake.alive) return;
-
-            // 更新方向
-            mySnake.direction = mySnake.nextDirection;
-
-            // 計算新的頭部位置
-            const head = mySnake.body[0];
-            const newHead = {
-                x: head.x + mySnake.direction.x,
-                y: head.y + mySnake.direction.y
-            };
-
-            // 檢查撞牆
-            if (newHead.x < 0 || newHead.x >= tileCount ||
-                newHead.y < 0 || newHead.y >= tileCount) {
-                mySnake.alive = false;
-                gameRunning = false;
-                showGameOver('遊戲結束！分數: ' + score);
-                return;
-            }
-
-            // 檢查撞到自己（跳過頭部）
-            for (let i = 1; i < mySnake.body.length; i++) {
-                const segment = mySnake.body[i];
-                if (segment.x === newHead.x && segment.y === newHead.y) {
-                    mySnake.alive = false;
-                    gameRunning = false;
-                    showGameOver('遊戲結束！分數: ' + score);
-                    return;
-                }
-            }
-
-            // 移動蛇
-            mySnake.body.unshift(newHead);
-
-            // 檢查是否吃到食物
-            let ateFood = false;
-            food = food.filter(f => {
-                if (f.x === newHead.x && f.y === newHead.y) {
-                    score += 10;
-                    scoreElement.textContent = score;
-                    players[playerId].score = score;
-                    ateFood = true;
-                    return false;
-                }
-                return true;
-            });
-
-            if (ateFood) {
-                spawnFood();
-            } else {
-                mySnake.body.pop();
-            }
-
-            // 確保至少有一個食物
-            if (food.length === 0) {
-                spawnFood();
+            // 檢查死亡狀態並更新 UI
+            if (connected && mySnake && !mySnake.alive) {
+                updateUI();
             }
         }
 
