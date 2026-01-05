@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>超級瑪利歐 - 簡化版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(to bottom, #5c94fc, #89c4f4);
+            font-family: 'Arial', sans-serif;
+        }
+
+        #gameCanvas {
+            border: 4px solid #333;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            background: #89c4f4;
+        }
+
+        .controls {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        .controls h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .controls p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .score {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .game-over {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e74c3c;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div class="controls">
+        <div class="score" id="score">得分: 0</div>
+        <h3>遊戲操作</h3>
+        <p>← → 方向鍵：左右移動</p>
+        <p>空白鍵 / ↑：跳躍</p>
+        <p>R 鍵：重新開始</p>
+        <div id="gameOverText" class="game-over" style="display: none;">遊戲結束！按 R 重新開始</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverText = document.getElementById('gameOverText');
+
+        // 遊戲狀態
+        let gameState = {
+            running: true,
+            score: 0,
+            gameOver: false
+        };
+
+        // 玩家物件
+        const player = {
+            x: 100,
+            y: 400,
+            width: 32,
+            height: 32,
+            velocityX: 0,
+            velocityY: 0,
+            speed: 5,
+            jumpPower: 12,
+            onGround: false,
+            color: '#e74c3c'
+        };
+
+        // 重力和摩擦力
+        const gravity = 0.5;
+        const friction = 0.8;
+
+        // 平台陣列
+        const platforms = [
+            { x: 0, y: 550, width: 800, height: 50, color: '#27ae60' },      // 地面
+            { x: 200, y: 450, width: 150, height: 20, color: '#2ecc71' },
+            { x: 450, y: 350, width: 150, height: 20, color: '#2ecc71' },
+            { x: 150, y: 250, width: 120, height: 20, color: '#2ecc71' },
+            { x: 500, y: 200, width: 120, height: 20, color: '#2ecc71' },
+            { x: 650, y: 450, width: 100, height: 20, color: '#2ecc71' }
+        ];
+
+        // 障礙物陣列（敵人）
+        const obstacles = [
+            { x: 300, y: 520, width: 30, height: 30, color: '#9b59b6', velocityX: 2, minX: 250, maxX: 400 },
+            { x: 500, y: 320, width: 30, height: 30, color: '#9b59b6', velocityX: -2, minX: 450, maxX: 600 },
+            { x: 200, y: 220, width: 30, height: 30, color: '#9b59b6', velocityX: 1.5, minX: 150, maxX: 270 }
+        ];
+
+        // 收集品陣列
+        const collectibles = [
+            { x: 275, y: 410, width: 20, height: 20, collected: false },
+            { x: 525, y: 310, width: 20, height: 20, collected: false },
+            { x: 200, y: 210, width: 20, height: 20, collected: false },
+            { x: 560, y: 160, width: 20, height: 20, collected: false },
+            { x: 700, y: 410, width: 20, height: 20, collected: false }
+        ];
+
+        // 鍵盤輸入
+        const keys = {};
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+
+            // 重新開始
+            if (e.code === 'KeyR') {
+                resetGame();
+            }
+
+            // 防止方向鍵滾動頁面
+            if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // 重置遊戲
+        function resetGame() {
+            player.x = 100;
+            player.y = 400;
+            player.velocityX = 0;
+            player.velocityY = 0;
+            player.onGround = false;
+
+            gameState.running = true;
+            gameState.score = 0;
+            gameState.gameOver = false;
+
+            // 重置收集品
+            collectibles.forEach(c => c.collected = false);
+
+            // 重置障礙物位置
+            obstacles[0].x = 300;
+            obstacles[1].x = 500;
+            obstacles[2].x = 200;
+
+            gameOverText.style.display = 'none';
+            updateScore();
+        }
+
+        // 更新分數顯示
+        function updateScore() {
+            scoreElement.textContent = `得分: ${gameState.score}`;
+        }
+
+        // 碰撞檢測
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        // 更新玩家
+        function updatePlayer() {
+            if (!gameState.running) return;
+
+            // 左右移動
+            if (keys['ArrowLeft']) {
+                player.velocityX = -player.speed;
+            } else if (keys['ArrowRight']) {
+                player.velocityX = player.speed;
+            } else {
+                player.velocityX *= friction;
+            }
+
+            // 跳躍
+            if ((keys['ArrowUp'] || keys['Space']) && player.onGround) {
+                player.velocityY = -player.jumpPower;
+                player.onGround = false;
+            }
+
+            // 應用重力
+            player.velocityY += gravity;
+
+            // 更新位置
+            player.x += player.velocityX;
+            player.y += player.velocityY;
+
+            // 邊界檢查
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+            // 掉出地圖
+            if (player.y > canvas.height) {
+                gameOver();
+            }
+
+            // 平台碰撞
+            player.onGround = false;
+            platforms.forEach(platform => {
+                if (checkCollision(player, platform)) {
+                    // 從上方碰撞
+                    if (player.velocityY > 0 &&
+                        player.y + player.height - player.velocityY <= platform.y) {
+                        player.y = platform.y - player.height;
+                        player.velocityY = 0;
+                        player.onGround = true;
+                    }
+                    // 從下方碰撞
+                    else if (player.velocityY < 0 &&
+                             player.y - player.velocityY >= platform.y + platform.height) {
+                        player.y = platform.y + platform.height;
+                        player.velocityY = 0;
+                    }
+                }
+            });
+        }
+
+        // 更新障礙物
+        function updateObstacles() {
+            obstacles.forEach(obstacle => {
+                obstacle.x += obstacle.velocityX;
+
+                // 在指定範圍內來回移動
+                if (obstacle.x <= obstacle.minX || obstacle.x >= obstacle.maxX) {
+                    obstacle.velocityX *= -1;
+                }
+
+                // 檢查與玩家碰撞
+                if (gameState.running && checkCollision(player, obstacle)) {
+                    gameOver();
+                }
+            });
+        }
+
+        // 更新收集品
+        function updateCollectibles() {
+            collectibles.forEach(collectible => {
+                if (!collectible.collected && checkCollision(player, collectible)) {
+                    collectible.collected = true;
+                    gameState.score += 10;
+                    updateScore();
+                }
+            });
+        }
+
+        // 遊戲結束
+        function gameOver() {
+            gameState.running = false;
+            gameState.gameOver = true;
+            gameOverText.style.display = 'block';
+        }
+
+        // 繪製玩家
+        function drawPlayer() {
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // 畫眼睛
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(player.x + 8, player.y + 8, 6, 6);
+            ctx.fillRect(player.x + 18, player.y + 8, 6, 6);
+
+            // 畫帽子
+            ctx.fillStyle = '#c0392b';
+            ctx.fillRect(player.x + 4, player.y - 4, 24, 8);
+        }
+
+        // 繪製平台
+        function drawPlatforms() {
+            platforms.forEach(platform => {
+                ctx.fillStyle = platform.color;
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+
+                // 平台邊框
+                ctx.strokeStyle = '#229954';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
+            });
+        }
+
+        // 繪製障礙物
+        function drawObstacles() {
+            obstacles.forEach(obstacle => {
+                ctx.fillStyle = obstacle.color;
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+
+                // 畫眼睛讓它看起來像敵人
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(obstacle.x + 5, obstacle.y + 8, 6, 6);
+                ctx.fillRect(obstacle.x + 19, obstacle.y + 8, 6, 6);
+
+                ctx.fillStyle = '#000';
+                ctx.fillRect(obstacle.x + 7, obstacle.y + 10, 3, 3);
+                ctx.fillRect(obstacle.x + 21, obstacle.y + 10, 3, 3);
+            });
+        }
+
+        // 繪製收集品（金幣）
+        function drawCollectibles() {
+            collectibles.forEach(collectible => {
+                if (!collectible.collected) {
+                    ctx.fillStyle = '#f39c12';
+                    ctx.beginPath();
+                    ctx.arc(
+                        collectible.x + collectible.width / 2,
+                        collectible.y + collectible.height / 2,
+                        collectible.width / 2,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.fill();
+
+                    // 金幣光澤
+                    ctx.fillStyle = '#f1c40f';
+                    ctx.beginPath();
+                    ctx.arc(
+                        collectible.x + collectible.width / 2 - 3,
+                        collectible.y + collectible.height / 2 - 3,
+                        4,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+            });
+        }
+
+        // 繪製背景元素
+        function drawBackground() {
+            // 雲朵
+            const clouds = [
+                { x: 100, y: 80 },
+                { x: 400, y: 120 },
+                { x: 650, y: 60 }
+            ];
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            clouds.forEach(cloud => {
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, 25, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 20, cloud.y, 30, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 45, cloud.y, 25, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // 主遊戲迴圈
+        function gameLoop() {
+            // 清除畫布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 繪製
+            drawBackground();
+            drawPlatforms();
+            drawCollectibles();
+            drawObstacles();
+            drawPlayer();
+
+            // 更新
+            updatePlayer();
+            updateObstacles();
+            updateCollectibles();
+
+            // 繼續循環
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 啟動遊戲
+        gameLoop();
+    </script>
+</body>
+</html>
