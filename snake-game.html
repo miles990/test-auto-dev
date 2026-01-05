@@ -169,6 +169,122 @@
         .connection-form button:hover {
             background: #2eb34a;
         }
+
+        .lobby-container {
+            display: none;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .lobby-container.active {
+            display: block;
+        }
+
+        .lobby-players {
+            margin-top: 15px;
+        }
+
+        .lobby-player {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .lobby-player.ready {
+            background: rgba(52, 199, 89, 0.3);
+            border: 2px solid #34c759;
+        }
+
+        .lobby-player.host {
+            border: 2px solid #FFD700;
+        }
+
+        .lobby-player-color {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 15px;
+            border: 3px solid #fff;
+        }
+
+        .lobby-player-info {
+            flex: 1;
+        }
+
+        .lobby-player-name {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .lobby-player-status {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .lobby-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+        }
+
+        .ready-btn {
+            background: #34c759;
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .ready-btn:hover {
+            background: #2eb34a;
+            transform: translateY(-2px);
+        }
+
+        .ready-btn.active {
+            background: #ff9500;
+        }
+
+        .start-btn {
+            background: #007aff;
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .start-btn:hover {
+            background: #0051d5;
+            transform: translateY(-2px);
+        }
+
+        .start-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .game-container {
+            display: none;
+        }
+
+        .game-container.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -182,22 +298,35 @@
 
         <div class="status disconnected" id="status">未連線</div>
 
-        <div class="game-info">
-            <div>分數: <span id="score">0</span></div>
-            <div>玩家: <span id="playerCount">0</span></div>
+        <!-- 大廳容器 -->
+        <div class="lobby-container" id="lobbyContainer">
+            <h2>🏠 遊戲大廳</h2>
+            <p>等待其他玩家加入...</p>
+            <div class="lobby-players" id="lobbyPlayers"></div>
+            <div class="lobby-buttons">
+                <button class="ready-btn" id="readyBtn" onclick="toggleReady()">準備</button>
+                <button class="start-btn" id="startBtn" onclick="hostStartGame()" style="display: none;">開始遊戲</button>
+            </div>
         </div>
 
-        <canvas id="gameCanvas" width="600" height="600"></canvas>
+        <!-- 遊戲容器 -->
+        <div class="game-container" id="gameContainer">
+            <div class="game-info">
+                <div>分數: <span id="score">0</span></div>
+                <div>玩家: <span id="playerCount">0</span></div>
+            </div>
 
-        <div class="controls">
-            <button onclick="startGame()">開始遊戲</button>
-            <button onclick="pauseGame()">暫停</button>
-            <button onclick="resetGame()">重新開始</button>
-        </div>
+            <canvas id="gameCanvas" width="600" height="600"></canvas>
 
-        <div class="player-list" id="playerList">
-            <h3>玩家列表</h3>
-            <div id="players"></div>
+            <div class="controls">
+                <button onclick="pauseGame()">暫停</button>
+                <button onclick="backToLobby()">返回大廳</button>
+            </div>
+
+            <div class="player-list" id="playerList">
+                <h3>玩家列表</h3>
+                <div id="players"></div>
+            </div>
         </div>
 
         <div class="instructions">
@@ -219,6 +348,11 @@
         const statusElement = document.getElementById('status');
         const playerCountElement = document.getElementById('playerCount');
         const playersElement = document.getElementById('players');
+        const lobbyContainer = document.getElementById('lobbyContainer');
+        const gameContainer = document.getElementById('gameContainer');
+        const lobbyPlayersElement = document.getElementById('lobbyPlayers');
+        const readyBtn = document.getElementById('readyBtn');
+        const startBtn = document.getElementById('startBtn');
 
         // 遊戲設定
         const GRID_SIZE = 20;
@@ -243,10 +377,14 @@
         let ws = null;
         let connected = false;
         let playerId = null;
+        let isHost = false;
+        let currentGameState = 'lobby'; // 'lobby' 或 'playing'
+        let myReady = false;
 
         // 玩家資料
         let players = {};
         let mySnake = null;
+        let lobbyPlayers = {}; // 大廳中的玩家
 
         // 食物位置
         let food = [];
@@ -320,28 +458,73 @@
             switch (data.type) {
                 case 'init':
                     playerId = data.playerId;
-                    mySnake = createSnake(data.color);
-                    players[playerId] = {
-                        id: playerId,
-                        snake: mySnake,
-                        color: data.color,
-                        score: 0
-                    };
+                    isHost = data.isHost;
+                    currentGameState = data.gameState;
+
+                    // 顯示大廳
+                    showLobby();
+
+                    // 如果是房主，顯示開始遊戲按鈕
+                    if (isHost) {
+                        startBtn.style.display = 'inline-block';
+                    }
+
+                    statusElement.textContent = '已連線 - 在大廳中';
+                    statusElement.className = 'status connected';
+                    break;
+
+                case 'lobbyUpdate':
+                    // 更新大廳玩家列表
+                    lobbyPlayers = {};
+                    data.players.forEach(p => {
+                        lobbyPlayers[p.id] = p;
+                        if (p.id === playerId) {
+                            myReady = p.ready;
+                            isHost = p.isHost;
+                        }
+                    });
+                    updateLobbyDisplay();
+
+                    // 更新房主狀態
+                    if (isHost) {
+                        startBtn.style.display = 'inline-block';
+                    } else {
+                        startBtn.style.display = 'none';
+                    }
+                    break;
+
+                case 'gameStart':
+                    // 遊戲開始
+                    currentGameState = 'playing';
+                    showGame();
+                    startGameLoop();
+                    statusElement.textContent = '遊戲進行中';
+                    break;
+
+                case 'gameEnd':
+                    // 遊戲結束，返回大廳
+                    currentGameState = 'lobby';
+                    showLobby();
+                    stopGameLoop();
+                    myReady = false;
+                    statusElement.textContent = '已連線 - 在大廳中';
                     break;
 
                 case 'update':
-                    // 更新所有玩家
-                    players = {};
-                    data.players.forEach(p => {
-                        players[p.id] = p;
-                        if (p.id === playerId) {
-                            mySnake = p.snake;
-                            score = p.score;
-                            scoreElement.textContent = score;
-                        }
-                    });
-                    food = data.food;
-                    updatePlayerList();
+                    // 更新所有玩家（遊戲中）
+                    if (currentGameState === 'playing') {
+                        players = {};
+                        data.players.forEach(p => {
+                            players[p.id] = p;
+                            if (p.id === playerId) {
+                                mySnake = p.snake;
+                                score = p.score;
+                                scoreElement.textContent = score;
+                            }
+                        });
+                        food = data.food;
+                        updatePlayerList();
+                    }
                     break;
 
                 case 'playerJoined':
@@ -351,7 +534,12 @@
                 case 'playerLeft':
                     console.log('玩家離開:', data.playerId);
                     delete players[data.playerId];
-                    updatePlayerList();
+                    delete lobbyPlayers[data.playerId];
+                    if (currentGameState === 'lobby') {
+                        updateLobbyDisplay();
+                    } else {
+                        updatePlayerList();
+                    }
                     break;
             }
         }
@@ -404,29 +592,95 @@
                 `).join('');
         }
 
-        // 開始遊戲
-        function startGame() {
-            if (gameRunning) return;
+        // 更新大廳顯示
+        function updateLobbyDisplay() {
+            const playerArray = Object.values(lobbyPlayers);
 
-            // 單機模式初始化
-            if (!connected && !mySnake) {
-                playerId = 'local';
-                mySnake = createSnake(colors[0]);
-                players[playerId] = {
-                    id: playerId,
-                    snake: mySnake,
-                    color: colors[0],
-                    score: 0
-                };
-                spawnFood();
-                updatePlayerList();
+            let html = '';
+            playerArray.forEach(p => {
+                const classes = ['lobby-player'];
+                if (p.ready) classes.push('ready');
+                if (p.isHost) classes.push('host');
+
+                let status = '';
+                if (p.isHost) status += '👑 房主 ';
+                if (p.ready) status += '✓ 已準備';
+                else status += '等待中...';
+
+                html += `
+                    <div class="${classes.join(' ')}">
+                        <div class="lobby-player-color" style="background-color: ${p.color}"></div>
+                        <div class="lobby-player-info">
+                            <div class="lobby-player-name">玩家 ${p.id.substring(0, 8)}${p.id === playerId ? ' (你)' : ''}</div>
+                            <div class="lobby-player-status">${status}</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            lobbyPlayersElement.innerHTML = html;
+
+            // 更新準備按鈕狀態
+            if (myReady) {
+                readyBtn.textContent = '取消準備';
+                readyBtn.classList.add('active');
+            } else {
+                readyBtn.textContent = '準備';
+                readyBtn.classList.remove('active');
             }
+        }
+
+        // 顯示大廳
+        function showLobby() {
+            lobbyContainer.classList.add('active');
+            gameContainer.classList.remove('active');
+        }
+
+        // 顯示遊戲
+        function showGame() {
+            lobbyContainer.classList.remove('active');
+            gameContainer.classList.add('active');
+        }
+
+        // 切換準備狀態
+        function toggleReady() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ready' }));
+            }
+        }
+
+        // 房主開始遊戲
+        function hostStartGame() {
+            if (isHost && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'startGame' }));
+            }
+        }
+
+        // 返回大廳
+        function backToLobby() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'backToLobby' }));
+            }
+        }
+
+        // 開始遊戲循環（客戶端繪製）
+        function startGameLoop() {
+            if (gameRunning) return;
 
             gameRunning = true;
             gamePaused = false;
 
             if (gameLoop) clearInterval(gameLoop);
-            gameLoop = setInterval(updateGame, GAME_SPEED);
+            gameLoop = setInterval(draw, GAME_SPEED);
+        }
+
+        // 停止遊戲循環
+        function stopGameLoop() {
+            gameRunning = false;
+            if (gameLoop) {
+                clearInterval(gameLoop);
+                gameLoop = null;
+            }
         }
 
         // 暫停遊戲
@@ -434,117 +688,6 @@
             gamePaused = !gamePaused;
         }
 
-        // 重新開始
-        function resetGame() {
-            gameRunning = false;
-            gamePaused = false;
-            score = 0;
-            scoreElement.textContent = score;
-
-            if (gameLoop) {
-                clearInterval(gameLoop);
-                gameLoop = null;
-            }
-
-            if (!connected) {
-                mySnake = createSnake(colors[0]);
-                players[playerId] = {
-                    id: playerId,
-                    snake: mySnake,
-                    color: colors[0],
-                    score: 0
-                };
-                food = [];
-                spawnFood();
-            } else if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'reset' }));
-            }
-        }
-
-        // 生成食物（單機模式）
-        function spawnFood() {
-            if (connected) return;
-
-            const newFood = {
-                x: Math.floor(Math.random() * tileCount),
-                y: Math.floor(Math.random() * tileCount)
-            };
-            food.push(newFood);
-        }
-
-        // 更新遊戲（單機模式）
-        function updateGame() {
-            if (!gameRunning || gamePaused || !mySnake) return;
-
-            if (!connected) {
-                // 單機模式邏輯
-                updateLocalGame();
-            }
-
-            draw();
-        }
-
-        // 單機遊戲邏輯
-        function updateLocalGame() {
-            if (!mySnake.alive) return;
-
-            // 更新方向
-            mySnake.direction = mySnake.nextDirection;
-
-            // 計算新的頭部位置
-            const head = mySnake.body[0];
-            const newHead = {
-                x: head.x + mySnake.direction.x,
-                y: head.y + mySnake.direction.y
-            };
-
-            // 檢查撞牆
-            if (newHead.x < 0 || newHead.x >= tileCount ||
-                newHead.y < 0 || newHead.y >= tileCount) {
-                mySnake.alive = false;
-                gameRunning = false;
-                showGameOver('遊戲結束！分數: ' + score);
-                return;
-            }
-
-            // 檢查撞到自己（跳過頭部）
-            for (let i = 1; i < mySnake.body.length; i++) {
-                const segment = mySnake.body[i];
-                if (segment.x === newHead.x && segment.y === newHead.y) {
-                    mySnake.alive = false;
-                    gameRunning = false;
-                    showGameOver('遊戲結束！分數: ' + score);
-                    return;
-                }
-            }
-
-            // 移動蛇
-            mySnake.body.unshift(newHead);
-
-            // 檢查是否吃到食物
-            let ateFood = false;
-            food = food.filter(f => {
-                if (f.x === newHead.x && f.y === newHead.y) {
-                    score += 10;
-                    scoreElement.textContent = score;
-                    players[playerId].score = score;
-                    ateFood = true;
-                    return false;
-                }
-                return true;
-            });
-
-            if (ateFood) {
-                spawnFood();
-            } else {
-                mySnake.body.pop();
-            }
-
-            // 確保至少有一個食物
-            if (food.length === 0) {
-                spawnFood();
-            }
-        }
 
         // 繪製遊戲
         function draw() {

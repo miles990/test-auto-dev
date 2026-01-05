@@ -20,6 +20,8 @@ const wss = new WebSocket.Server({
 let players = {};
 let food = [];
 let gameLoop = null;
+let gameState = 'lobby'; // 'lobby' 或 'playing'
+let roomHost = null; // 房主 ID
 
 // 顏色列表
 const colors = [
@@ -106,6 +108,22 @@ function broadcast(data) {
             player.ws.send(message);
         }
     });
+}
+
+// 廣播大廳狀態
+function broadcastLobbyState() {
+    const lobbyData = {
+        type: 'lobbyUpdate',
+        players: Object.entries(players).map(([id, player]) => ({
+            id: id,
+            color: player.color,
+            ready: player.ready,
+            isHost: id === roomHost
+        })),
+        gameState: gameState,
+        roomHost: roomHost
+    };
+    broadcast(lobbyData);
 }
 
 // 更新遊戲狀態
@@ -201,6 +219,61 @@ function updateGame() {
     broadcast(gameState);
 }
 
+// 開始遊戲
+function startGame() {
+    if (gameState === 'playing') return;
+
+    console.log('開始遊戲');
+    gameState = 'playing';
+
+    // 為所有玩家建立蛇
+    Object.values(players).forEach(player => {
+        player.snake = createSnake(player.color);
+        player.score = 0;
+        player.ready = false;
+    });
+
+    // 生成初始食物
+    food = [];
+    for (let i = 0; i < 3; i++) {
+        spawnFood();
+    }
+
+    // 通知所有玩家遊戲開始
+    broadcast({
+        type: 'gameStart'
+    });
+
+    // 開始遊戲循環
+    startGameLoop();
+}
+
+// 結束遊戲回到大廳
+function endGame() {
+    console.log('遊戲結束，返回大廳');
+    gameState = 'lobby';
+
+    // 清空所有玩家的蛇
+    Object.values(players).forEach(player => {
+        player.snake = null;
+        player.ready = false;
+    });
+
+    // 停止遊戲循環
+    stopGameLoop();
+
+    // 清空食物
+    food = [];
+
+    // 通知所有玩家返回大廳
+    broadcast({
+        type: 'gameEnd'
+    });
+
+    // 廣播大廳狀態
+    broadcastLobbyState();
+}
+
 // 開始遊戲循環
 function startGameLoop() {
     if (gameLoop) return;
@@ -230,34 +303,34 @@ wss.on('connection', (ws) => {
         id: playerId,
         ws: ws,
         color: color,
-        snake: createSnake(color),
-        score: 0
+        snake: null, // 在大廳中蛇還沒建立
+        score: 0,
+        ready: false // 準備狀態
     };
+
+    // 如果是第一個玩家，設為房主
+    if (!roomHost || !players[roomHost]) {
+        roomHost = playerId;
+        console.log(`玩家 ${playerId} 成為房主`);
+    }
 
     // 發送初始化資料給新玩家
     ws.send(JSON.stringify({
         type: 'init',
         playerId: playerId,
-        color: color
+        color: color,
+        isHost: playerId === roomHost,
+        gameState: gameState
     }));
+
+    // 發送當前大廳狀態
+    broadcastLobbyState();
 
     // 通知其他玩家
     broadcast({
         type: 'playerJoined',
         playerId: playerId
     });
-
-    // 確保有食物
-    if (food.length === 0) {
-        for (let i = 0; i < 3; i++) {
-            spawnFood();
-        }
-    }
-
-    // 如果這是第一個玩家，開始遊戲循環
-    if (Object.keys(players).length === 1) {
-        startGameLoop();
-    }
 
     // 處理訊息
     ws.on('message', (message) => {
@@ -276,7 +349,37 @@ wss.on('connection', (ws) => {
                 return;
             }
 
-            if (data.type === 'move' && players[playerId] && players[playerId].snake) {
+            if (data.type === 'ready') {
+                // 玩家準備
+                if (players[playerId] && gameState === 'lobby') {
+                    players[playerId].ready = !players[playerId].ready;
+                    console.log(`玩家 ${playerId} ${players[playerId].ready ? '已準備' : '取消準備'}`);
+                    broadcastLobbyState();
+
+                    // 檢查是否所有玩家都準備好
+                    const allReady = Object.values(players).every(p => p.ready);
+                    const playerCount = Object.keys(players).length;
+                    if (allReady && playerCount >= 2) {
+                        console.log('所有玩家準備完成，3 秒後開始遊戲');
+                        setTimeout(() => {
+                            if (gameState === 'lobby') {
+                                startGame();
+                            }
+                        }, 3000);
+                    }
+                }
+            } else if (data.type === 'startGame') {
+                // 房主強制開始遊戲
+                if (playerId === roomHost && gameState === 'lobby') {
+                    const playerCount = Object.keys(players).length;
+                    if (playerCount >= 1) {
+                        console.log(`房主 ${playerId} 開始遊戲`);
+                        startGame();
+                    } else {
+                        console.log('玩家數量不足，無法開始遊戲');
+                    }
+                }
+            } else if (data.type === 'move' && players[playerId] && players[playerId].snake) {
                 const snake = players[playerId].snake;
                 const newDir = data.direction;
 
@@ -309,12 +412,10 @@ wss.on('connection', (ws) => {
                     (snake.direction.y === 0 && newDir.y !== 0)) {
                     snake.nextDirection = newDir;
                 }
-            } else if (data.type === 'reset') {
-                // 重置玩家的蛇
-                if (players[playerId]) {
-                    players[playerId].snake = createSnake(players[playerId].color);
-                    players[playerId].score = 0;
-                    console.log(`玩家 ${playerId} 重新開始`);
+            } else if (data.type === 'backToLobby') {
+                // 返回大廳
+                if (gameState === 'playing') {
+                    endGame();
                 }
             } else {
                 console.warn(`玩家 ${playerId} 發送未知訊息類型: ${data.type}`);
@@ -330,16 +431,32 @@ wss.on('connection', (ws) => {
 
         delete players[playerId];
 
+        // 如果是房主離開，重新指定房主
+        if (playerId === roomHost) {
+            const remainingPlayers = Object.keys(players);
+            if (remainingPlayers.length > 0) {
+                roomHost = remainingPlayers[0];
+                console.log(`新房主: ${roomHost}`);
+            } else {
+                roomHost = null;
+            }
+        }
+
         // 通知其他玩家
         broadcast({
             type: 'playerLeft',
             playerId: playerId
         });
 
-        // 如果沒有玩家了，停止遊戲循環
+        // 如果沒有玩家了，重置遊戲狀態
         if (Object.keys(players).length === 0) {
             stopGameLoop();
             food = [];
+            gameState = 'lobby';
+            roomHost = null;
+        } else if (gameState === 'lobby') {
+            // 在大廳中更新狀態
+            broadcastLobbyState();
         }
     });
 
