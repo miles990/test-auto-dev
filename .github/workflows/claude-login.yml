@@ -1,0 +1,36 @@
+# Claude Login Workflow
+# 執行 claude login 並輸出認證 URL
+
+name: 🔐 Claude Login
+
+on:
+  workflow_dispatch:
+
+jobs:
+  login:
+    name: 🔐 Login
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run Claude Login
+        run: |
+          echo "=========================================="
+          echo "🔐 開始 Claude Login..."
+          echo "=========================================="
+
+          # 執行 login，輸出會包含 URL
+          # 使用 timeout 避免無限等待
+          timeout 120 claude login || true
+
+          echo "=========================================="
+          echo "請查看上方輸出的 URL 進行認證"
+          echo "=========================================="
