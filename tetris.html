@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>俄羅斯方塊 - Tetris</title>
+    <link rel="stylesheet" href="tetris.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-header">
+            <h1>🎮 俄羅斯方塊</h1>
+        </div>
+
+        <div class="game-content">
+            <div class="game-info">
+                <div class="info-panel">
+                    <h3>分數</h3>
+                    <div id="score" class="score-value">0</div>
+                </div>
+
+                <div class="info-panel">
+                    <h3>等級</h3>
+                    <div id="level" class="score-value">1</div>
+                </div>
+
+                <div class="info-panel">
+                    <h3>消除行數</h3>
+                    <div id="lines" class="score-value">0</div>
+                </div>
+
+                <div class="info-panel next-piece-panel">
+                    <h3>下一個方塊</h3>
+                    <canvas id="nextPieceCanvas" width="120" height="120"></canvas>
+                </div>
+            </div>
+
+            <div class="game-board">
+                <canvas id="gameCanvas" width="300" height="600"></canvas>
+                <div id="gameOverlay" class="game-overlay hidden">
+                    <div class="overlay-content">
+                        <h2 id="overlayTitle">遊戲暫停</h2>
+                        <p id="overlayMessage">按 空白鍵 繼續</p>
+                        <button id="restartButton" class="btn">重新開始</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="game-controls">
+                <h3>操作說明</h3>
+                <div class="control-item">
+                    <span class="key">←</span>
+                    <span class="description">向左移動</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">→</span>
+                    <span class="description">向右移動</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">↓</span>
+                    <span class="description">快速下降</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">↑</span>
+                    <span class="description">旋轉方塊</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">空白</span>
+                    <span class="description">暫停/繼續</span>
+                </div>
+
+                <button id="startButton" class="btn btn-primary">開始遊戲</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="tetris.js"></script>
+</body>
+</html>
