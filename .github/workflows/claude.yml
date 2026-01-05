@@ -36,15 +36,18 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-          # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
 
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
+          prompt: |
+            完成任務後，請在回覆中包含以下資訊：
 
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr:*)'
+            ### 使用的工具與技能
+            列出完成此任務時使用的主要工具和技能，例如：
+            - 程式語言/框架
+            - 使用的 CLI 工具
+            - 特殊技術或方法
+
+            ### 任務摘要
+            簡要說明完成了什麼以及如何完成
 
