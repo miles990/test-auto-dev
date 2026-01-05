@@ -102,17 +102,6 @@ jobs:
             - 建立/修改了哪些檔案
             - 任何注意事項
 
-          # 允許更多工具
-          allowed_tools: |
-            Bash
-            Read
-            Write
-            Edit
-            Glob
-            Grep
-
-          # 輸出詳細日誌
-          claude_args: '--verbose'
 
       - name: 📊 顯示執行結果
         if: always()
