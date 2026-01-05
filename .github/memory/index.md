@@ -13,4 +13,5 @@
 
 ## 失敗經驗
 <!-- FAILURES_START -->
+- [2026-01-05 多人連線模式自動開始問題](failures/20260105-multiplayer-autostart-issue.md)
 <!-- FAILURES_END -->
