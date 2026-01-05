@@ -35,8 +35,19 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          show_full_output: true
 
           additional_permissions: |
             actions: read
+
+          prompt: |
+            完成任務後，請在回覆中包含以下資訊：
+
+            ### 🛠️ 使用的工具與技能
+            - 程式語言/框架
+            - 使用的 CLI 工具
+            - 特殊技術或方法
+
+            ### 📝 任務摘要
+            - 完成了什麼
+            - 建立/修改了哪些檔案
 
