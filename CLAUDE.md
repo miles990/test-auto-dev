@@ -45,8 +45,20 @@
 每次新增記錄後，更新 `.github/memory/index.md` 的索引。
 
 ## 專案結構
+
+### 網頁遊戲專案
 - 網頁遊戲/應用放在根目錄
 - 每個 HTML 檔案應為獨立可執行的單一檔案
+
+### Unity 遊戲專案
+- Unity 專案放在 `unity-games/` 目錄下
+- 每個 Unity 遊戲使用獨立的子目錄
+- 目錄結構：`unity-games/<遊戲名稱>/`
+  - `Assets/` - Unity 專案資源
+  - `ProjectSettings/` - Unity 專案設定
+  - `README.md` - 專案說明與建置指南
+  - `Build/` - WebGL 建置輸出（不納入版控）
+- 建置輸出可部署至 GitHub Pages 或其他靜態託管服務
 
 ## 完成任務報告格式
 
