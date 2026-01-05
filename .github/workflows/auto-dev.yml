@@ -65,44 +65,22 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-          # 使用 skills 的自訂提示
-          prompt: |
+          # 使用 custom_instructions 而不是 prompt，這樣不會覆蓋預設行為
+          custom_instructions: |
             請使用繁體中文回覆，除非是專有名詞（如 HTML、JavaScript、CSS 等技術名詞）。
 
-            你是一個專業的軟體開發助手，配備了完整的軟體開發技能庫。
+            完成任務後，在回覆中包含：
 
-            ## 可用 Skills
-            你可以在 .claude/skills/ 目錄找到 47 個軟體開發 skills，包含：
-            - software-design/: 架構設計、設計模式、API 設計
-            - software-engineering/: 程式碼品質、測試、DevOps
-            - development-stacks/: 前端、後端、資料庫
-            - programming-languages/: 各種程式語言最佳實踐
-            - domain-applications/: 領域應用模式
-            - tools-integrations/: 開發工具整合
-
-            每個 skill 目錄都有 SKILL.md 檔案，包含詳細的指南和最佳實踐。
-            請根據任務需求，參考相關的 skill 來完成工作。
-
-            ## 任務
-            請根據 Issue 或 Comment 的描述完成開發任務。
-
-            ## 輸出要求
-            1. 在開始前，說明你將使用哪些 skills
-            2. 執行過程中，顯示進度更新
-            3. 完成後，建立 PR 並說明改動內容
-            4. 如果遇到問題，清楚說明原因和建議
-
-            ## 完成報告格式
-            任務完成後，請在回覆中包含：
-
-            ### 🛠️ 使用的 Skills
-            - 列出實際參考的 skill 檔案路徑
-            - 說明每個 skill 如何幫助完成任務
+            ### 🛠️ 使用的工具與技能
+            - 列出使用的程式語言/框架
+            - 使用的技術或方法
 
             ### 📝 任務摘要
             - 完成了什麼
             - 建立/修改了哪些檔案
-            - 任何注意事項
+
+            ### 📚 Memory 更新
+            - 如果有學到新知識或遇到問題，更新 .github/memory/ 中的相關檔案
 
 
       - name: 📊 顯示執行結果
