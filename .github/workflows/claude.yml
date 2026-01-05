@@ -39,3 +39,9 @@ jobs:
           additional_permissions: |
             actions: read
 
+          # 額外指示：報告使用的工具（不會覆蓋預設行為）
+          custom_instructions: |
+            完成任務後，在回覆最後加上：
+            ### 🛠️ 使用的工具
+            列出使用的程式語言和工具
+
