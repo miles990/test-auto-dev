@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多人連線貪食蛇遊戲</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1rem;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .status.connected {
+            background: rgba(52, 199, 89, 0.3);
+        }
+
+        .status.disconnected {
+            background: rgba(255, 59, 48, 0.3);
+        }
+
+        canvas {
+            border: 3px solid #fff;
+            border-radius: 10px;
+            background: #000;
+            display: block;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .controls button {
+            background: #fff;
+            color: #667eea;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .controls button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .controls button:active {
+            transform: translateY(0);
+        }
+
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+
+        .instructions h3 {
+            margin-bottom: 10px;
+        }
+
+        .instructions ul {
+            margin-left: 20px;
+        }
+
+        .player-list {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .player-list h3 {
+            margin-bottom: 10px;
+        }
+
+        .player-item {
+            padding: 5px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+        }
+
+        .player-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 2px solid #fff;
+        }
+
+        .connection-form {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .connection-form input {
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            margin-right: 10px;
+            font-size: 1rem;
+            width: 250px;
+        }
+
+        .connection-form button {
+            background: #34c759;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .connection-form button:hover {
+            background: #2eb34a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐍 多人連線貪食蛇遊戲</h1>
+
+        <div class="connection-form">
+            <input type="text" id="serverUrl" placeholder="WebSocket 伺服器位址" value="ws://localhost:8080">
+            <button id="connectBtn" onclick="connectToServer()">連線</button>
+        </div>
+
+        <div class="status disconnected" id="status">未連線</div>
+
+        <div class="game-info">
+            <div>分數: <span id="score">0</span></div>
+            <div>玩家: <span id="playerCount">0</span></div>
+        </div>
+
+        <canvas id="gameCanvas" width="600" height="600"></canvas>
+
+        <div class="controls">
+            <button onclick="startGame()">開始遊戲</button>
+            <button onclick="pauseGame()">暫停</button>
+            <button onclick="resetGame()">重新開始</button>
+        </div>
+
+        <div class="player-list" id="playerList">
+            <h3>玩家列表</h3>
+            <div id="players"></div>
+        </div>
+
+        <div class="instructions">
+            <h3>遊戲說明</h3>
+            <ul>
+                <li>使用方向鍵 ↑↓←→ 或 WASD 控制蛇的移動</li>
+                <li>吃到食物會增加分數和蛇的長度</li>
+                <li>撞到牆壁或其他玩家的蛇會死亡</li>
+                <li>可以與其他玩家同時遊玩</li>
+                <li>需要啟動 WebSocket 伺服器才能多人連線</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const statusElement = document.getElementById('status');
+        const playerCountElement = document.getElementById('playerCount');
+        const playersElement = document.getElementById('players');
+
+        // 遊戲設定
+        const GRID_SIZE = 20;
+        const TILE_COUNT = canvas.width / GRID_SIZE;
+        const GAME_SPEED = 100; // 遊戲更新速度（毫秒）
+        const EYE_SIZE = 3;
+        const EYE_OFFSET = 5;
+        const GRID_PADDING = 2;
+        const FOOD_RADIUS_OFFSET = 2;
+
+        // 向下兼容的別名
+        const gridSize = GRID_SIZE;
+        const tileCount = TILE_COUNT;
+
+        // 遊戲狀態
+        let gameRunning = false;
+        let gamePaused = false;
+        let score = 0;
+        let gameLoop = null;
+
+        // WebSocket 連線
+        let ws = null;
+        let connected = false;
+        let playerId = null;
+
+        // 玩家資料
+        let players = {};
+        let mySnake = null;
+
+        // 食物位置
+        let food = [];
+
+        // 顏色列表
+        const colors = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
+            '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'
+        ];
+
+        // 初始化蛇
+        function createSnake(color) {
+            return {
+                body: [
+                    { x: Math.floor(tileCount / 2), y: Math.floor(tileCount / 2) }
+                ],
+                direction: { x: 1, y: 0 },
+                nextDirection: { x: 1, y: 0 },
+                color: color,
+                alive: true,
+                score: 0
+            };
+        }
+
+        // 連接到伺服器
+        function connectToServer() {
+            const serverUrl = document.getElementById('serverUrl').value;
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+
+            try {
+                ws = new WebSocket(serverUrl);
+
+                ws.onopen = () => {
+                    connected = true;
+                    statusElement.textContent = '已連線';
+                    statusElement.className = 'status connected';
+                    console.log('已連線到伺服器');
+                };
+
+                ws.onmessage = (event) => {
+                    handleServerMessage(JSON.parse(event.data));
+                };
+
+                ws.onerror = (error) => {
+                    console.error('WebSocket 錯誤:', error);
+                    statusElement.textContent = '連線錯誤';
+                    statusElement.className = 'status disconnected';
+                };
+
+                ws.onclose = () => {
+                    connected = false;
+                    statusElement.textContent = '連線已斷開';
+                    statusElement.className = 'status disconnected';
+                    console.log('與伺服器斷線');
+                };
+            } catch (error) {
+                console.error('無法連線:', error);
+                showNotification('無法連線到伺服器 - 使用單機模式', 'error');
+                setTimeout(() => {
+                    statusElement.textContent = '單機模式';
+                    statusElement.className = 'status disconnected';
+                }, 2000);
+            }
+        }
+
+        // 處理伺服器訊息
+        function handleServerMessage(data) {
+            switch (data.type) {
+                case 'init':
+                    playerId = data.playerId;
+                    mySnake = createSnake(data.color);
+                    players[playerId] = {
+                        id: playerId,
+                        snake: mySnake,
+                        color: data.color,
+                        score: 0
+                    };
+                    break;
+
+                case 'update':
+                    // 更新所有玩家
+                    players = {};
+                    data.players.forEach(p => {
+                        players[p.id] = p;
+                        if (p.id === playerId) {
+                            mySnake = p.snake;
+                            score = p.score;
+                            scoreElement.textContent = score;
+                        }
+                    });
+                    food = data.food;
+                    updatePlayerList();
+                    break;
+
+                case 'playerJoined':
+                    console.log('新玩家加入:', data.playerId);
+                    break;
+
+                case 'playerLeft':
+                    console.log('玩家離開:', data.playerId);
+                    delete players[data.playerId];
+                    updatePlayerList();
+                    break;
+            }
+        }
+
+        // 發送移動指令到伺服器
+        function sendMove(direction) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'move',
+                    direction: direction
+                }));
+            } else if (mySnake) {
+                // 單機模式
+                mySnake.nextDirection = direction;
+            }
+        }
+
+        // 顯示遊戲結束訊息
+        function showGameOver(message) {
+            statusElement.textContent = message;
+            statusElement.className = 'status disconnected';
+            setTimeout(() => {
+                if (!connected) {
+                    statusElement.textContent = '單機模式';
+                } else {
+                    statusElement.textContent = '已連線';
+                    statusElement.className = 'status connected';
+                }
+            }, 3000);
+        }
+
+        // 顯示通知訊息
+        function showNotification(message, type = 'info') {
+            statusElement.textContent = message;
+            statusElement.className = `status ${type === 'error' ? 'disconnected' : 'connected'}`;
+        }
+
+        // 更新玩家列表
+        function updatePlayerList() {
+            const playerArray = Object.values(players);
+            playerCountElement.textContent = playerArray.length;
+
+            playersElement.innerHTML = playerArray
+                .sort((a, b) => b.score - a.score)
+                .map(p => `
+                    <div class="player-item">
+                        <div class="player-color" style="background-color: ${p.color}"></div>
+                        <div>玩家 ${p.id.substring(0, 6)} - 分數: ${p.score}</div>
+                    </div>
+                `).join('');
+        }
+
+        // 開始遊戲
+        function startGame() {
+            if (gameRunning) return;
+
+            // 單機模式初始化
+            if (!connected && !mySnake) {
+                playerId = 'local';
+                mySnake = createSnake(colors[0]);
+                players[playerId] = {
+                    id: playerId,
+                    snake: mySnake,
+                    color: colors[0],
+                    score: 0
+                };
+                spawnFood();
+                updatePlayerList();
+            }
+
+            gameRunning = true;
+            gamePaused = false;
+
+            if (gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(updateGame, GAME_SPEED);
+        }
+
+        // 暫停遊戲
+        function pauseGame() {
+            gamePaused = !gamePaused;
+        }
+
+        // 重新開始
+        function resetGame() {
+            gameRunning = false;
+            gamePaused = false;
+            score = 0;
+            scoreElement.textContent = score;
+
+            if (gameLoop) {
+                clearInterval(gameLoop);
+                gameLoop = null;
+            }
+
+            if (!connected) {
+                mySnake = createSnake(colors[0]);
+                players[playerId] = {
+                    id: playerId,
+                    snake: mySnake,
+                    color: colors[0],
+                    score: 0
+                };
+                food = [];
+                spawnFood();
+            } else if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'reset' }));
+            }
+        }
+
+        // 生成食物（單機模式）
+        function spawnFood() {
+            if (connected) return;
+
+            const newFood = {
+                x: Math.floor(Math.random() * tileCount),
+                y: Math.floor(Math.random() * tileCount)
+            };
+            food.push(newFood);
+        }
+
+        // 更新遊戲（單機模式）
+        function updateGame() {
+            if (!gameRunning || gamePaused || !mySnake) return;
+
+            if (!connected) {
+                // 單機模式邏輯
+                updateLocalGame();
+            }
+
+            draw();
+        }
+
+        // 單機遊戲邏輯
+        function updateLocalGame() {
+            if (!mySnake.alive) return;
+
+            // 更新方向
+            mySnake.direction = mySnake.nextDirection;
+
+            // 計算新的頭部位置
+            const head = mySnake.body[0];
+            const newHead = {
+                x: head.x + mySnake.direction.x,
+                y: head.y + mySnake.direction.y
+            };
+
+            // 檢查撞牆
+            if (newHead.x < 0 || newHead.x >= tileCount ||
+                newHead.y < 0 || newHead.y >= tileCount) {
+                mySnake.alive = false;
+                gameRunning = false;
+                showGameOver('遊戲結束！分數: ' + score);
+                return;
+            }
+
+            // 檢查撞到自己（跳過頭部）
+            for (let i = 1; i < mySnake.body.length; i++) {
+                const segment = mySnake.body[i];
+                if (segment.x === newHead.x && segment.y === newHead.y) {
+                    mySnake.alive = false;
+                    gameRunning = false;
+                    showGameOver('遊戲結束！分數: ' + score);
+                    return;
+                }
+            }
+
+            // 移動蛇
+            mySnake.body.unshift(newHead);
+
+            // 檢查是否吃到食物
+            let ateFood = false;
+            food = food.filter(f => {
+                if (f.x === newHead.x && f.y === newHead.y) {
+                    score += 10;
+                    scoreElement.textContent = score;
+                    players[playerId].score = score;
+                    ateFood = true;
+                    return false;
+                }
+                return true;
+            });
+
+            if (ateFood) {
+                spawnFood();
+            } else {
+                mySnake.body.pop();
+            }
+
+            // 確保至少有一個食物
+            if (food.length === 0) {
+                spawnFood();
+            }
+        }
+
+        // 繪製遊戲
+        function draw() {
+            // 清空畫布
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 繪製格線
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= tileCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * gridSize, 0);
+                ctx.lineTo(i * gridSize, canvas.height);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(0, i * gridSize);
+                ctx.lineTo(canvas.width, i * gridSize);
+                ctx.stroke();
+            }
+
+            // 繪製食物
+            ctx.fillStyle = '#FF0000';
+            food.forEach(f => {
+                ctx.beginPath();
+                ctx.arc(
+                    f.x * GRID_SIZE + GRID_SIZE / 2,
+                    f.y * GRID_SIZE + GRID_SIZE / 2,
+                    GRID_SIZE / 2 - FOOD_RADIUS_OFFSET,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+            });
+
+            // 繪製所有玩家的蛇
+            Object.values(players).forEach(player => {
+                if (!player.snake || !player.snake.alive) return;
+
+                ctx.fillStyle = player.color;
+                player.snake.body.forEach((segment, index) => {
+                    if (index === 0) {
+                        // 蛇頭
+                        ctx.fillStyle = player.color;
+                        ctx.fillRect(
+                            segment.x * GRID_SIZE + GRID_PADDING,
+                            segment.y * GRID_SIZE + GRID_PADDING,
+                            GRID_SIZE - GRID_PADDING * 2,
+                            GRID_SIZE - GRID_PADDING * 2
+                        );
+
+                        // 眼睛
+                        ctx.fillStyle = '#FFF';
+
+                        if (player.snake.direction.x === 1) { // 向右
+                            ctx.fillRect(segment.x * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE,
+                                       segment.y * GRID_SIZE + EYE_OFFSET, EYE_SIZE, EYE_SIZE);
+                            ctx.fillRect(segment.x * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE,
+                                       segment.y * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE, EYE_SIZE, EYE_SIZE);
+                        } else if (player.snake.direction.x === -1) { // 向左
+                            ctx.fillRect(segment.x * GRID_SIZE + EYE_OFFSET,
+                                       segment.y * GRID_SIZE + EYE_OFFSET, EYE_SIZE, EYE_SIZE);
+                            ctx.fillRect(segment.x * GRID_SIZE + EYE_OFFSET,
+                                       segment.y * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE, EYE_SIZE, EYE_SIZE);
+                        } else if (player.snake.direction.y === 1) { // 向下
+                            ctx.fillRect(segment.x * GRID_SIZE + EYE_OFFSET,
+                                       segment.y * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE, EYE_SIZE, EYE_SIZE);
+                            ctx.fillRect(segment.x * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE,
+                                       segment.y * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE, EYE_SIZE, EYE_SIZE);
+                        } else { // 向上
+                            ctx.fillRect(segment.x * GRID_SIZE + EYE_OFFSET,
+                                       segment.y * GRID_SIZE + EYE_OFFSET, EYE_SIZE, EYE_SIZE);
+                            ctx.fillRect(segment.x * GRID_SIZE + GRID_SIZE - EYE_OFFSET - EYE_SIZE,
+                                       segment.y * GRID_SIZE + EYE_OFFSET, EYE_SIZE, EYE_SIZE);
+                        }
+                    } else {
+                        // 蛇身
+                        const alpha = 1 - (index / player.snake.body.length) * 0.5;
+                        ctx.globalAlpha = alpha;
+                        ctx.fillStyle = player.color;
+                        ctx.fillRect(
+                            segment.x * GRID_SIZE + GRID_PADDING,
+                            segment.y * GRID_SIZE + GRID_PADDING,
+                            GRID_SIZE - GRID_PADDING * 2,
+                            GRID_SIZE - GRID_PADDING * 2
+                        );
+                        ctx.globalAlpha = 1;
+                    }
+                });
+            });
+
+            // 暫停提示
+            if (gamePaused) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#FFF';
+                ctx.font = '48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('遊戲暫停', canvas.width / 2, canvas.height / 2);
+            }
+        }
+
+        // 鍵盤控制
+        document.addEventListener('keydown', (e) => {
+            if (!mySnake) return;
+
+            let newDirection = null;
+
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (mySnake.direction.y === 0) {
+                        newDirection = { x: 0, y: -1 };
+                    }
+                    e.preventDefault();
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (mySnake.direction.y === 0) {
+                        newDirection = { x: 0, y: 1 };
+                    }
+                    e.preventDefault();
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (mySnake.direction.x === 0) {
+                        newDirection = { x: -1, y: 0 };
+                    }
+                    e.preventDefault();
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (mySnake.direction.x === 0) {
+                        newDirection = { x: 1, y: 0 };
+                    }
+                    e.preventDefault();
+                    break;
+                case ' ':
+                    pauseGame();
+                    e.preventDefault();
+                    break;
+            }
+
+            if (newDirection) {
+                sendMove(newDirection);
+            }
+        });
+
+        // 初始化
+        draw();
+    </script>
+</body>
+</html>

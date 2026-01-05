@@ -1,0 +1,25 @@
+{
+  "name": "multiplayer-snake-game",
+  "version": "1.0.0",
+  "description": "多人連線貪食蛇遊戲",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "snake",
+    "game",
+    "multiplayer",
+    "websocket"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
