@@ -6,6 +6,7 @@
 <!-- LEARNINGS_END -->
 
 ## 技術決策
+- [2026-01-05 簡單連線大廳系統](decisions/20260105-simple-lobby-system.md)
 - [2026-01-05 Canvas vs Unity 技術選擇](decisions/20260105-canvas-vs-unity.md)
 
 ## 程式碼模式
