@@ -13,4 +13,5 @@
 
 ## 失敗經驗
 <!-- FAILURES_START -->
+- [2026-01-05 連線版遊戲無法自動開始](failures/20260105-multiplayer-no-autostart.md)
 <!-- FAILURES_END -->
