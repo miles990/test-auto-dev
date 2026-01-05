@@ -39,8 +39,10 @@ jobs:
           additional_permissions: |
             actions: read
 
-          # 額外指示：報告使用的工具（不會覆蓋預設行為）
+          # 額外指示
           custom_instructions: |
+            請使用繁體中文回覆，除非是專有名詞（如 HTML、JavaScript、CSS 等）。
+
             完成任務後，在回覆最後加上：
             ### 🛠️ 使用的工具
             列出使用的程式語言和工具

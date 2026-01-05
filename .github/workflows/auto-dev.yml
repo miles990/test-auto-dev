@@ -67,6 +67,8 @@ jobs:
 
           # 使用 skills 的自訂提示
           prompt: |
+            請使用繁體中文回覆，除非是專有名詞（如 HTML、JavaScript、CSS 等技術名詞）。
+
             你是一個專業的軟體開發助手，配備了完整的軟體開發技能庫。
 
             ## 可用 Skills
