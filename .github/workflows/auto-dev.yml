@@ -1,5 +1,5 @@
-# Auto-Dev Workflow
-# 使用官方 claude-code-action
+# Auto-Dev Workflow (Claude Max)
+# 使用官方 claude-code-action + OAuth Token
 
 name: 🤖 Auto-Dev
 
@@ -18,7 +18,6 @@ permissions:
 
 jobs:
   auto-dev:
-    # 條件：Issue 有 auto-dev label 或 comment 包含 @claude
     if: |
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'auto-dev')) ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
@@ -31,15 +30,8 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         with:
-          # 二擇一：
-          # 方式 1: Claude Max (OAuth)
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # 方式 2: API Key
-          # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-
-          # 自訂提示（可選）
           prompt: |
             你是一個專業的軟體開發助手。
-            請根據 Issue 描述完成開發任務。
-            完成後建立 PR。
+            請根據 Issue 或 Comment 的描述完成任務。
+            如果是開發任務，完成後建立 PR。

@@ -8,7 +8,7 @@ body:
     attributes:
       label: 目標
       description: 描述你想要達成的開發目標
-      placeholder: "例如：建立一個簡單的 Hello World 程式"
+      placeholder: "例如：建立一個 Hello World 程式"
     validations:
       required: true
 
@@ -17,17 +17,5 @@ body:
     attributes:
       label: 驗收標準
       description: 如何判斷任務完成？
-      placeholder: |
-        - [ ] 功能正常運作
-        - [ ] 有測試
     validations:
       required: false
-
-  - type: dropdown
-    id: priority
-    attributes:
-      label: 優先級
-      options:
-        - normal
-        - high
-        - low
